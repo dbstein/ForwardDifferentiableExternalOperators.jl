@@ -1,6 +1,3 @@
-using FowardDifferentiableLinearOperators
-using Test
-
-@testset "FowardDifferentiableLinearOperators.jl" begin
+@testset "ForwardDifferentiableLinearOperators.jl" begin
     # Write your tests here.
 end
