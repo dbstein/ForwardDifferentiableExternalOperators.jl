@@ -33,8 +33,8 @@ end
 struct NonLinearWrappedOperator{T, OP} <: WrappedOperator{T, OP}
     operator::OP
 end
-function NonlinearWrappedOperator(operator::OP) where OP
-    return NonlinearWrappedOperator{eltype(operator), OP}(operator)
+function NonLinearWrappedOperator(operator::OP) where OP
+    return NonLinearWrappedOperator{eltype(operator), OP}(operator)
 end
 is_linear(::NonLinearWrappedOperator) = false
 function ApplyDerivative!(

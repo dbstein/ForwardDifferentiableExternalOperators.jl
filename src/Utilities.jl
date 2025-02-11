@@ -23,7 +23,19 @@ end
 # packing functions on scalars
 @inline PackGrad(v::TT, p::TT, DT) where TT = DT(v, ForwardDiff.Partials{1, TT}((p,)))
 # packing functions on StaticVectors
-@inline PackGrad(v::SVector{N, TT}, p::SVector{N, TT}, DT) where {N, TT} = PackGrad.(v, p, DT)
+# @inline PackGrad(v::SVector{N, TT}, p::SVector{N, TT}, DT) where {N, TT} = PackGrad.(v, p, DT)
+@inline function PackGrad(
+    v::SVector{N, TT},
+    p::SVector{N, TT},
+    DT
+) where {N, TT}
+    _DT = eltype(DT)
+    return SVector{N, _DT}(PackGrad.(v, p, _DT))
+end
+
+# function to get the dual type
+@inline dual_backing(::Type{T}) where T <: AbstractFloat = ForwardDiff.Dual{Nothing, T, 1}
+@inline dual_backing(::Type{T}) where T <: SVector = SVector{length(T), dual_backing(eltype(T))}
 
 # checker functions on scalars
 @inline is_dual_type(::Type{<:ForwardDiff.Dual}) = true
@@ -37,7 +49,8 @@ struct CacheVector{T, DT}
     DualCache::Vector{DT}
 end
 function CacheVector(T, N)
-    DT = ForwardDiff.Dual{Nothing, T, 1}
+    DT = dual_backing(T)
+    # DT = ForwardDiff.Dual{Nothing, T, 1}
     return CacheVector{T, DT}(
                 Vector{T}(undef, N),
                 Vector{DT}(undef, N)
@@ -48,3 +61,14 @@ function CacheVector(V::AbstractVector)
 end
 (CV::CacheVector{T, DT})(::Type{T})  where {T, DT} = CV.FloatCache
 (CV::CacheVector{T, DT})(::Type{DT}) where {T, DT} = CV.DualCache
+Base.length(CV::CacheVector) = length(CV.FloatCache)
+function Base.show(
+    CV::CacheVector{T, DT}
+) where {T, DT}
+    println("CacheVector")
+    println("  Length is:             $(length(CV))")
+    println("  Base Type:             $(T)")
+    println("  Dual Type:             $(DT)")
+end
+Base.print(CV::CacheVector) = show(CV)
+Base.display(CV::CacheVector) = show(CV)

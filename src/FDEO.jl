@@ -1,7 +1,7 @@
 
 struct ForwardDifferentiableExternalOperator{
             T,
-            DT <: ForwardDiff.Dual{Nothing, T, 1},
+            DT,
             OP <: WrappedOperator{T}
     }
     operator::OP
@@ -23,9 +23,9 @@ function Base.show(
     println("  Base Type:             $(T)")
     println("  Dual Type:             $(DT)")
 end
-is_linear(F::ForwardDifferentiableExternalOperator) = is_linear(F.operator)
 Base.print(F::ForwardDifferentiableExternalOperator) = show(F)
 Base.display(F::ForwardDifferentiableExternalOperator) = show(F)
+is_linear(F::ForwardDifferentiableExternalOperator) = is_linear(F.operator)
 Base.size(F::ForwardDifferentiableExternalOperator) = size(F.operator)
 Base.size(F::ForwardDifferentiableExternalOperator, i::Int) = size(F.operator, i)
 Base.eltype(F::ForwardDifferentiableExternalOperator) = eltype(F.operator)
@@ -38,7 +38,9 @@ function ForwardDifferentiableNonLinearOperator(operator, autocaching=false)
 end
 function ForwardDifferentiableExternalOperator(operator, auto_caching, wrap_func)
     T = eltype(operator)
-    DT = ForwardDiff.Dual{Nothing, T, 1}
+    display(T)
+    DT = dual_backing(T)
+    # DT = ForwardDiff.Dual{Nothing, T, 1}
     values_cache = Vector{T}(undef, size(operator, 2))
     partials_cache = Vector{T}(undef, size(operator, 2))
     output_cache1 = Vector{T}(undef, size(operator, 1))
