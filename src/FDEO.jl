@@ -83,3 +83,20 @@ function LinearAlgebra.mul!(
     @. y = PackGrad(FDEO.output_cache1, FDEO.output_cache2, DT)
     return y
 end
+
+function Base.:*(
+    FDEO::ForwardDifferentiableExternalOperator{T, DT},
+    x::AbstractVector{T}
+) where {T, DT}
+    y = Vector{T}(undef, size(FDEO, 1))
+    LinearAlgebra.mul!(y, FDEO, x)
+    return y
+end
+function Base.:*(
+    FDEO::ForwardDifferentiableExternalOperator{T, DT},
+    x::AbstractVector{DT}
+) where {T, DT}
+    y = Vector{DT}(undef, size(FDEO, 1))
+    LinearAlgebra.mul!(y, FDEO, x)
+    return y
+end

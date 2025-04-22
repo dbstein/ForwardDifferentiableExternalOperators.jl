@@ -9,7 +9,7 @@ using Chairmarks
 using UnsafeArrays
 
 # make this large so the linear operation dominates timings
-N = 16
+N = 100
 
 const Pt3 = SVector{3, Float64}
 
@@ -157,7 +157,6 @@ display(y1 ≈ y2)
 _y = similar(x);
 @b mul!($_y,$J,$v)
 
-
 ################################################################################
 # test auto-caching version version
 
@@ -169,7 +168,7 @@ g!(y, x) = f!(y, x, AFDOp1, AFDOp2, w)
 J = JacVec(g!, x, tag=nothing);
 y3 = similar(x);
 # you MUST evaluate once at x
-f!(_y, x, AFDOp1, AFDOp2, w);
+g!(_y, x);
 mul!(y3,J,v);
 # same as before?
 display(y1 ≈ y3)
