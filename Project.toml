@@ -4,6 +4,7 @@ authors = ["David Stein"]
 version = "1.0.0-DEV"
 
 [deps]
+BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
 ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 LinearOperators = "5c8ed15e-5a4c-59e4-a42b-c7e8811fb125"
@@ -12,6 +13,7 @@ StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 UnsafeArrays = "c4a57d5a-5b31-53a6-b365-19f8c011fbd6"
 
 [compat]
+BenchmarkTools = "1.6.0"
 ForwardDiff = "0.10.38"
 LinearAlgebra = "1.11.0"
 LinearOperators = "2.10.0"

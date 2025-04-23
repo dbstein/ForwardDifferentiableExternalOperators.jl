@@ -46,8 +46,7 @@ v = rand(N);
 w = CacheVector(x);
 
 # in place version using f! // FDLO
-g!(y, x) = f!(y, x, w, FDLO)
-J! = JacVec(g!, x, tag=nothing);
+J! = JacVec((y, x) -> f!(y, x, w, FDLO), x, tag=nothing);
 y1 = similar(x);
 mul!(y1,J!,v);
 # out of place version using f // FDLO
@@ -62,15 +61,15 @@ display(y2 ≈ y3)
 # now get a timing test of this version
 _y = similar(x);
 @b mul!($_y,$J!,$v)
+@b $J*$v
 
 # we'll now test an auto-caching version
 AFDLO = ForwardDifferentiableLinearOperator(LO, true)
-g!(y, x) = f!(y, x, w, AFDLO)
-J! = JacVec(g!, x, tag=nothing);
+J! = JacVec((y, x) -> f!(y, x, w, AFDLO), x, tag=nothing);
 J = JacVec(x -> f(x, γ, AFDLO), x);
 y4 = similar(x);
 # you MUST evaluate once at x
-f!(_y, x, w, AFDLO);
+f!(similar(x), x, w, AFDLO);
 mul!(y4,J!,v);
 f(x, γ, AFDLO);
 y5 = J*v;

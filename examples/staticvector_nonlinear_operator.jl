@@ -29,6 +29,7 @@ end
 Base.size(op::MyOperator1) = (length(op.pos), length(op.pos))
 Base.size(op::MyOperator1, i::Int) = length(op.pos)
 Base.eltype(::MyOperator1) = SVector{3, Float64}
+# needed for the in-place version
 function LinearAlgebra.mul!(
     y::AbstractVector{SVector{3, T}},
     op::MyOperator1,
@@ -52,6 +53,15 @@ function LinearAlgebra.mul!(
     end
     return y
 end
+# needed for the out-of-place version
+function Base.:*(
+    op::MyOperator1,
+    x::AbstractVector{SVector{3, T}}
+) where T <: AbstractFloat
+    y = similar(x)
+    mul!(y, op, x)
+    return y
+end
 pos = rand(SVector{3, Float64}, N);
 MyOp1 = MyOperator1(pos);
 
@@ -64,6 +74,7 @@ end
 Base.size(op::MyOperator2) = (op.N, op.N)
 Base.size(op::MyOperator2, i::Int) = op.N
 Base.eltype(op::MyOperator2) = SVector{3, Float64}
+# these are needed for the in-place version
 function LinearAlgebra.mul!(
     y::AbstractVector{SVector{3, T}},
     op::MyOperator2,
@@ -81,13 +92,27 @@ function ForwardDifferentiableExternalOperators.ApplyDerivative!(
     @. y = 2x * dot(x, p) + dot(x, x) * p
     return y
 end
+# these are needed for the out-of-place version
+function Base.:*(
+    op::MyOperator2,
+    x::AbstractVector{SVector{3, T}}
+) where T <: AbstractFloat
+    return @. dot(x, x) * x
+end
+function ForwardDifferentiableExternalOperators.ApplyDerivative(
+    op::MyOperator2,
+    x::AbstractVector{SVector{3, T}},
+    p::AbstractVector{SVector{3, T}}
+) where T <: AbstractFloat
+    return @. 2x * dot(x, p) + dot(x, x) * p
+end
 
 MyOp2 = MyOperator2(N)
 
 ################################################################################
 # implementation of test functions
 
-# using this packages machinery
+# using this packages machinery (in place)
 function f!(y::AbstractVector{T}, x::AbstractVector{T}, Op1, Op2, w) where T
     # reform as SVectors
     xr = unsafe_svectorize(x, SVector{3, T})
@@ -99,12 +124,22 @@ function f!(y::AbstractVector{T}, x::AbstractVector{T}, Op1, Op2, w) where T
     # linear operation done using this packages machinery
     mul!(yr, Op1, wr)
     # nonlinear operation done using ForwardDiff directly
-    @. yr = exp(dot(yr, xr)) * yr
+    @. yr = sin(dot(yr, xr)) * yr
     return y
 end
+# using this packages machinery (out of place)
+function f(x::AbstractVector{T}, Op1, Op2) where T
+    # reform as SVectors
+    xr = unsafe_svectorize(x, SVector{3, T})
+    yr = Op1 * (Op2 * xr)
+    # nonlinear operation done using ForwardDiff directly
+    yr = @. sin(dot(yr, xr)) * yr
+    return reinterpret(T, yr)
+end
+
 # a straightforward implementation of the operator
 # to pass to ForwardDiff.jacobian for ground truth
-function f(x, pos)
+function direct_f(x, pos)
     T = eltype(x)
     xr = reinterpret(SVector{3, T}, x)
     potential = @. dot(xr, xr) * xr
@@ -123,7 +158,7 @@ function f(x, pos)
             end
         end
     end
-    @. y = exp(dot(y, xr)) * y
+    @. y = sin(dot(y, xr)) * y
     return reinterpret(T, y)
 end
 
@@ -142,20 +177,22 @@ FDOp1 = ForwardDifferentiableLinearOperator(MyOp1)
 FDOp2 = ForwardDifferentiableNonLinearOperator(MyOp2)
 
 # make a function that JacVec likes, and generate Jacobian-Vector product operator
-g!(y, x) = f!(y, x, FDOp1, FDOp2, w)
-J = JacVec(g!, x, tag=nothing);
+J! = JacVec((y, x) -> f!(y, x, FDOp1, FDOp2, w), x, tag=nothing);
+J = JacVec(x -> f(x, FDOp1, FDOp2), x);
 # test our JacVec
 y1 = similar(x);
-mul!(y1,J,v);
+mul!(y1,J!,v);
+y2 = J*v;
 # compare to taking the Jacobian via ForwardDiff of the straightforward implementation
-g(x) = f(x, pos)
-y2 = ForwardDiff.jacobian(g, x) * v;
+y3 = ForwardDiff.jacobian(x -> direct_f(x, pos), x) * v;
 # are these the same?
-display(y1 ≈ y2)
+display(y1 ≈ y3)
+display(y2 ≈ y3)
 
 # now get a timing test of this version
 _y = similar(x);
-@b mul!($_y,$J,$v)
+@b mul!($_y,$J!,$v)
+@b $J*$v
 
 ################################################################################
 # test auto-caching version version
@@ -164,14 +201,18 @@ _y = similar(x);
 AFDOp1 = ForwardDifferentiableLinearOperator(MyOp1, true)
 AFDOp2 = ForwardDifferentiableNonLinearOperator(MyOp2, true)
 
-g!(y, x) = f!(y, x, AFDOp1, AFDOp2, w)
-J = JacVec(g!, x, tag=nothing);
-y3 = similar(x);
+J! = JacVec((y, x) -> f!(y, x, AFDOp1, AFDOp2, w), x, tag=nothing);
+J = JacVec(x -> f(x, AFDOp1, AFDOp2), x);
+y4 = similar(x);
 # you MUST evaluate once at x
-g!(_y, x);
-mul!(y3,J,v);
+f!(similar(x), x, AFDOp1, AFDOp2, w);
+mul!(y4,J!,v);
+f(x, AFDOp1, AFDOp2);
+y5 = J*v;
 # same as before?
-display(y1 ≈ y3)
+display(y4 ≈ y3)
+display(y5 ≈ y3)
 
 # now get a timing test, should be about twice as fast
-@b mul!($y3,$J,$v)
+@b mul!($y5,$J!,$v)
+@b $J*$v

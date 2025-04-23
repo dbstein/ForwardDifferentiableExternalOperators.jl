@@ -57,6 +57,10 @@ function ForwardDifferentiableExternalOperator(operator, auto_caching, wrap_func
             )
 end
 
+# these could possibly use the "underying type" rewrite
+# to allow slightly more general operation (i.e from T -> S of different types)
+# but that will wait for now...
+
 function LinearAlgebra.mul!(
     y::AbstractVector{T},
     FDEO::ForwardDifferentiableExternalOperator{T, DT},
@@ -68,48 +72,41 @@ function LinearAlgebra.mul!(
     end
     return y
 end
-
 function LinearAlgebra.mul!(
     y::AbstractVector{DT},
     FDEO::ForwardDifferentiableExternalOperator{T, DT},
     x::AbstractVector{DT}
 ) where {T, DT}
+    (UDT, _) = assess_underlying_type(DT)
     @. FDEO.values_cache = get_value(x)
     @. FDEO.partials_cache = get_partials(x)
     if !FDEO.auto_caching
         mul!(FDEO.output_cache1, FDEO.operator, FDEO.values_cache)
     end
     ApplyDerivative!(FDEO.output_cache2, FDEO.operator, FDEO.values_cache, FDEO.partials_cache)
-    @. y = PackGrad(FDEO.output_cache1, FDEO.output_cache2, DT)
+    @. y = PackGrad(FDEO.output_cache1, FDEO.output_cache2, UDT)
     return y
 end
 
 ################################################################################
 # Out-of-place variants
-# Currently only work on Scalar types (i.e. not SVectors)
-# need to think through underlying logic of how to handle the tag
-# when dealing with SVector types (or other types the user might try to use...)
-# the issue has to do with dispatching on AbstractVector{T<:ForwardDiff.Dual}
-# you could Union in AbstractVector{<:SVector{N, <:ForwardDiff.Dual}}
-# but it seems like there's got to be a better solution to this mess
-# maybe instead of using dispatch, have a function that tests whether
-# the type is dual or not, and then pushes to the right call.
 
-function Base.:*(
-    FDEO::ForwardDifferentiableExternalOperator{T},
-    x::AbstractVector{T}
-) where {T}
-    y = FDEO.operator * x
-    if FDEO.auto_caching
-        FDEO.output_cache1 .= y
-    end
-    return y
-end
 function Base.:*(
     FDEO::ForwardDifferentiableExternalOperator,
     x::AbstractVector{T}
-) where {T<:ForwardDiff.Dual}
-    yv = FDEO.auto_caching ? FDEO.output_cache1 : FDEO.operator * get_value.(x)
-    yp = ApplyDerivative(FDEO.operator, get_value.(x), get_partials.(x))
-    return PackGrad.(yv, yp, T)
+) where {T}
+    (UT, is_dual_type) = assess_underlying_type(T)
+    if is_dual_type
+        # how we operator on duals
+        yv = FDEO.auto_caching ? FDEO.output_cache1 : FDEO.operator * get_value.(x)
+        yp = ApplyDerivative(FDEO.operator, get_value.(x), get_partials.(x))
+        return PackGrad.(yv, yp, UT)    
+    else
+        # how we operate on non-duals
+        y = FDEO.operator * x
+        if FDEO.auto_caching
+            FDEO.output_cache1 .= y
+        end
+        return y
+    end
 end

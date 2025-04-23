@@ -21,16 +21,14 @@ end
 @inline get_partials(x::SVector{N, T}) where {N, T <: Real} = x
 
 # packing functions on scalars
-@inline PackGrad(v::TT, p::TT, DT) where TT = DT(v, ForwardDiff.Partials{1, TT}((p,)))
+@inline PackGrad(v::TT, p::TT, UDT::Type{DT}) where {TT, DT <: ForwardDiff.Dual} = UDT(v, ForwardDiff.Partials{1, TT}((p,)))
 # packing functions on StaticVectors
-# @inline PackGrad(v::SVector{N, TT}, p::SVector{N, TT}, DT) where {N, TT} = PackGrad.(v, p, DT)
 @inline function PackGrad(
     v::SVector{N, TT},
     p::SVector{N, TT},
-    DT
-) where {N, TT}
-    _DT = eltype(DT)
-    return SVector{N, _DT}(PackGrad.(v, p, _DT))
+    UDT::Type{DT}
+) where {N, TT, DT <: ForwardDiff.Dual}
+    return SVector{N, UDT}(PackGrad.(v, p, UDT))
 end
 
 # function to get the dual type
@@ -72,3 +70,19 @@ function Base.show(
 end
 Base.print(CV::CacheVector) = show(CV)
 Base.display(CV::CacheVector) = show(CV)
+
+# function to recursively get the element type
+function get_number_type(T)
+    if T <: Number
+        return T
+    end
+    get_number_type(eltype(T))
+end
+get_number_type(::Type{T}) where T <: Number = T
+get_number_type(::Type{T}) where {R <: Number, T <: AbstractVector{R}} = R
+get_number_type(::Type{T}) where {R <: Number, S <: AbstractVector{R}, T <: AbstractVector{S}} = R
+
+function assess_underlying_type(T)
+    UT = get_number_type(T)
+    return UT, UT <: ForwardDiff.Dual
+end
