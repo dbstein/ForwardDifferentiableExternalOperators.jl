@@ -12,6 +12,12 @@ function LinearAlgebra.mul!(
     mul!(y, WO.operator, x)
     return y
 end
+function Base.:*(
+    WO::WrappedOperator{T}, 
+    x::AbstractVector{T}
+) where T
+    return WO.operator * x
+end
 
 struct LinearWrappedOperator{T, OP} <: WrappedOperator{T, OP}
     operator::OP
@@ -29,6 +35,13 @@ function ApplyDerivative!(
     mul!(y, LWO.operator, p)
     return y
 end
+function ApplyDerivative(
+    LWO::LinearWrappedOperator{T}, 
+    x::AbstractVector{T},
+    p::AbstractVector{T}
+) where T
+    return LWO.operator * p
+end
 
 struct NonLinearWrappedOperator{T, OP} <: WrappedOperator{T, OP}
     operator::OP
@@ -45,4 +58,11 @@ function ApplyDerivative!(
 ) where T
     ApplyDerivative!(y, NLWO.operator, x, p)
     return y
+end
+function ApplyDerivative(
+    NLWO::NonLinearWrappedOperator{T}, 
+    x::AbstractVector{T},
+    p::AbstractVector{T}
+) where T
+    return ApplyDerivative(NLWO.operator, x, p)
 end

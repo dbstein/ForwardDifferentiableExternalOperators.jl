@@ -25,9 +25,18 @@ function f!(y, x, w, FDLO)
     @. y += x^3
     return y
 end
+# out of place implementation of the same function
+# again, using ForwardDifferentiableLinearOperator for
+# multiplication by γ
+function f(x, γ, FDLO)
+    w = sin.(x)
+    w = FDLO*w
+    return @. exp(x) * w + x^3
+end
+
 # a straightforward implementation of the operator
 # to pass to ForwardDiff.jacobian for ground truth
-function f(x, γ)
+function direct_f(x, γ)
     return exp.(x) .* (γ * sin.(x)) .+ x.^3
 end
 
@@ -36,35 +45,42 @@ x = rand(N);
 v = rand(N);
 w = CacheVector(x);
 
-# make a function that JacVec likes, and generate Jacobian-Vector product operator
+# in place version using f! // FDLO
 g!(y, x) = f!(y, x, w, FDLO)
-J = JacVec(g!, x, tag=nothing);
-# test our JacVec
+J! = JacVec(g!, x, tag=nothing);
 y1 = similar(x);
-mul!(y1,J,v);
+mul!(y1,J!,v);
+# out of place version using f // FDLO
+J = JacVec(x -> f(x, γ, FDLO), x);
+y2 = J*v;
 # compare to taking the Jacobian via ForwardDiff of the straightforward implementation
-g(x) = f(x, γ)
-y2 = ForwardDiff.jacobian(g, x) * v;
+y3 = ForwardDiff.jacobian(x -> direct_f(x, γ), x) * v;
 # are these the same?
-display(y1 ≈ y2)
+display(y1 ≈ y3)
+display(y2 ≈ y3)
 
 # now get a timing test of this version
 _y = similar(x);
-@b mul!($_y,$J,$v)
+@b mul!($_y,$J!,$v)
 
 # we'll now test an auto-caching version
 AFDLO = ForwardDifferentiableLinearOperator(LO, true)
 g!(y, x) = f!(y, x, w, AFDLO)
-J = JacVec(g!, x, tag=nothing);
-y3 = similar(x);
+J! = JacVec(g!, x, tag=nothing);
+J = JacVec(x -> f(x, γ, AFDLO), x);
+y4 = similar(x);
 # you MUST evaluate once at x
 f!(_y, x, w, AFDLO);
-mul!(y3,J,v);
+mul!(y4,J!,v);
+f(x, γ, AFDLO);
+y5 = J*v;
 # same as before?
-display(y1 ≈ y3)
+display(y3 ≈ y4)
+display(y3 ≈ y5)
 
 # now get a timing test, should be about twice as fast
-@b mul!($y3,$J,$v)
+@b mul!($y4,$J!,$v)
+@b $J*$v
 
 # since the linear operator should dominate here, compare to
 # the timing of a direct matrix-vector multiplication by γ
